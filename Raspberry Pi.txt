@@ -1,0 +1,45 @@
+import time
+import paho.mqtt.client as mqtt
+from gpiozero import DigitalInputDevice
+import adafruit_dht
+import board
+
+# MQTT Broker Configuration
+MQTT_BROKER = "broker.emqx.io"  # Change to your MQTT broker IP or URL
+MQTT_PORT = 1883
+MQTT_TOPIC = "raspberrypi5/dht11"
+
+# Initialize MQTT Client
+client = mqtt.Client()
+client.connect(MQTT_BROKER, MQTT_PORT, 60)
+SERIAL_PORT = "/dev/ttyAMA0"
+
+# Define DHT11 Sensor (GPIO 4)
+dht_device = adafruit_dht.DHT11(board.D23)
+
+# Function to Read Data & Publish to MQTT
+def read_and_send_data():
+    try:
+        temperature = dht_device.temperature
+        humidity = dht_device.humidity
+
+        if temperature is not None and humidity is not None:
+            payload = f'{{"temperature": {temperature}, "humidity": {humidity}}}'
+            client.publish(MQTT_TOPIC, payload)
+            print("Publishing:", payload)
+        else:
+            print("Failed to get sensor data. Retrying...")
+
+    except Exception as e:
+        print("Error:", str(e))
+
+# Main Loop
+try:
+    while True:
+        read_and_send_data()
+        time.sleep(5)  # Send data every 5 seconds
+
+except KeyboardInterrupt:
+    print("Script stopped by user")
+    dht_device.exit()
+    client.disconnect()
