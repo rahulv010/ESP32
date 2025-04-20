@@ -1,0 +1,78 @@
+#include <SoftwareSerial.h>
+#include <DHT.h>
+
+#define DHTPIN 7         // DHT11 data pin connected to Arduino Pin 7
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+
+SoftwareSerial ESP8266(2, 3); // RX, TX
+
+const char* SSID = "Unifi";        // Replace with your WiFi SSID
+const char* PASSWORD = "99990000"; // Replace with your WiFi password
+const char* API_KEY = "YOUR_API_KEY";  // Replace with your ThingSpeak API Key
+
+void setup() {
+  Serial.begin(115200);
+  ESP8266.begin(115200);
+  dht.begin();
+
+  Serial.println("Connecting to WiFi...");
+  connectToWiFi();
+}
+
+void loop() {
+  float temperature = dht.readTemperature();
+  float humidity = dht.readHumidity();
+
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print(" °C, Humidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+
+  sendToThingSpeak(temperature, humidity);
+
+  delay(20000); // Send data every 20 seconds
+}
+
+// Function to connect ESP8266 to WiFi
+void connectToWiFi() {
+  ESP8266.println("AT+RST");    // Reset ESP8266
+  delay(1000);
+  ESP8266.println("AT+CWMODE=1");  // Set mode to Station
+  delay(1000);
+
+  String cmd = "AT+CWJAP=\"" + String(SSID) + "\",\"" + String(PASSWORD) + "\"";
+  ESP8266.println(cmd);
+  delay(5000);
+
+  if (ESP8266.find("WIFI CONNECTED")) {
+    Serial.println("WiFi Connected!");
+  } else {
+    Serial.println("Failed to Connect!");
+  }
+}
+
+// Function to send data to ThingSpeak
+void sendToThingSpeak(float temperature, float humidity) {
+  String request = "GET /update?api_key=" + String(API_KEY) +
+                   "&field1=" + String(temperature) +
+                   "&field2=" + String(humidity) + "\r\n";
+
+  ESP8266.println("AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80");
+  delay(2000);
+
+  ESP8266.println("AT+CIPSEND=" + String(request.length() + 2));
+  delay(1000);
+
+  ESP8266.print(request);
+  delay(1000);
+
+  ESP8266.println("AT+CIPCLOSE");
+  Serial.println("Data Sent to ThingSpeak");
+}
